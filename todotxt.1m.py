@@ -13,8 +13,8 @@ Actions dispatched via sys.argv:
   add             – osascript prompt, appends creation-dated task
 
 Config sources:
-  ~/.todo/config                        – todo-txt shell vars (TODO_FILE, DONE_FILE …)
-  ~/.config/todotxt-xbar/config.ini     – plugin-only settings (sort_by, max_items …)
+  ~/.todo/config                – todo-txt shell vars (TODO_FILE, DONE_FILE …)
+  ~/.todo/todotxt-bar.ini       – plugin-only settings (sort_by, max_items …)
 """
 
 import configparser
@@ -59,7 +59,7 @@ def get_file_paths():
 
 
 def load_plugin_config() -> dict:
-    ini = Path.home() / ".todo" / "todotxt-bar.config"
+    ini = Path.home() / ".todo" / "todotxt-bar.ini"
     cfg = configparser.ConfigParser(inline_comment_prefixes=(";", "#"))
     cfg.read(ini)
     def g(k, d): return cfg.get("settings", k, fallback=d)
@@ -89,10 +89,6 @@ class Task:
         self.priority = None
         self.creation_date = None
         self.completion_date = None
-        self.body = raw
-        self.due = None
-        self.projects: list = []
-        self.contexts: list = []
         self._parse()
 
     def _parse(self):
@@ -170,12 +166,9 @@ def do_done(todo_file: Path, line_num: int):
     if 0 < line_num <= len(lines):
         raw = lines[line_num - 1].rstrip("\n")
         if not raw.startswith("x "):
-            # Preserve priority as pri:X extension, then strip the (X) prefix
-            priority_match = re.match(r"^\(([A-Z])\) ", raw)
-            if priority_match:
-                pri = priority_match.group(1)
-                raw = raw[priority_match.end():]
-                raw = f"{raw} pri:{pri}"
+            m = re.match(r"^\(([A-Z])\) ", raw)
+            if m:
+                raw = f"{raw[m.end():]} pri:{m.group(1)}"
             lines[line_num - 1] = f"x {TODAY} {raw}\n"
     _write_lines(todo_file, lines)
 
@@ -224,7 +217,7 @@ _ANSI = {
     "cyan":  "\x1b[36m", "white":   "\x1b[37m", "gray":    "\x1b[90m",
     "grey":  "\x1b[90m",
 }
-_RESET = "\x1b[0m"
+_RESET = "\x1b[0m"  # SwiftBar's ANSI parser breaks without explicit reset between codes
 
 
 def colorize(text: str, cfg: dict) -> str:
