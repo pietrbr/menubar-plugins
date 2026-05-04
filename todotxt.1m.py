@@ -31,6 +31,7 @@ TODAY = date.today().isoformat()
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
+
 def _expand_vars(val: str, env: dict) -> str:
     return re.sub(r"\$\{?(\w+)\}?", lambda m: env.get(m.group(1), m.group(0)), val)
 
@@ -62,25 +63,39 @@ def load_plugin_config() -> dict:
     ini = Path.home() / ".todo" / "todotxt-bar.ini"
     cfg = configparser.ConfigParser(inline_comment_prefixes=(";", "#"))
     cfg.read(ini)
-    def g(k, d): return cfg.get("settings", k, fallback=d)
-    def gb(k, d): return cfg.getboolean("settings", k, fallback=d)
-    def gi(k, d): return cfg.getint("settings", k, fallback=d)
+
+    def g(k, d):
+        return cfg.get("settings", k, fallback=d)
+
+    def gb(k, d):
+        return cfg.getboolean("settings", k, fallback=d)
+
+    def gi(k, d):
+        return cfg.getint("settings", k, fallback=d)
+
     return {
-        "sort_by":        g("sort_by", "priority"),
-        "max_items":      gi("max_items", 30),
-        "show_priority":  gb("show_priority", True),
-        "color_project":   g("color_project", "green"),    # ANSI name
-        "color_context":   g("color_context", "green"),    # ANSI name
-        "color_overdue":   g("color_overdue", "#FF6B6B"),  # hex, whole-line
-        "color_due_today": g("color_due_today", "#FFD93D"),  # hex, whole-line
+        "sort_by": g("sort_by", "priority"),
+        "max_items": gi("max_items", 30),
+        "show_priority": gb("show_priority", True),
     }
 
 
 # ── Task model ────────────────────────────────────────────────────────────────
 
+
 class Task:
-    __slots__ = ("line_num", "raw", "done", "priority", "creation_date",
-                 "completion_date", "body", "due", "projects", "contexts")
+    __slots__ = (
+        "line_num",
+        "raw",
+        "done",
+        "priority",
+        "creation_date",
+        "completion_date",
+        "body",
+        "due",
+        "projects",
+        "contexts",
+    )
 
     def __init__(self, line_num: int, raw: str):
         self.line_num = line_num
@@ -100,18 +115,18 @@ class Task:
             m = re.match(r"^(\d{4}-\d{2}-\d{2}) ", s)
             if m:
                 self.completion_date = m.group(1)
-                s = s[m.end():]
+                s = s[m.end() :]
 
         if not self.done:
             m = re.match(r"^\(([A-Z])\) ", s)
             if m:
                 self.priority = m.group(1)
-                s = s[m.end():]
+                s = s[m.end() :]
 
         m = re.match(r"^(\d{4}-\d{2}-\d{2}) ", s)
         if m:
             self.creation_date = m.group(1)
-            s = s[m.end():]
+            s = s[m.end() :]
 
         self.body = s
         self.projects = re.findall(r"(?<!\S)\+(\S+)", s)
@@ -127,9 +142,17 @@ class Task:
         if by == "due":
             return (d, p, self.line_num)
         if by == "project":
-            return (self.projects[0].lower() if self.projects else "zzz", d, self.line_num)
+            return (
+                self.projects[0].lower() if self.projects else "zzz",
+                d,
+                self.line_num,
+            )
         if by == "context":
-            return (self.contexts[0].lower() if self.contexts else "zzz", d, self.line_num)
+            return (
+                self.contexts[0].lower() if self.contexts else "zzz",
+                d,
+                self.line_num,
+            )
         return (d, self.line_num)
 
 
@@ -142,6 +165,7 @@ def read_tasks(path: Path) -> list:
 
 
 # ── File operations ───────────────────────────────────────────────────────────
+
 
 def _read_lines(path: Path) -> list:
     try:
@@ -168,7 +192,7 @@ def do_done(todo_file: Path, line_num: int):
         if not raw.startswith("x "):
             m = re.match(r"^\(([A-Z])\) ", raw)
             if m:
-                raw = f"{raw[m.end():]} pri:{m.group(1)}"
+                raw = f"{raw[m.end() :]} pri:{m.group(1)}"
             lines[line_num - 1] = f"x {TODAY} {raw}\n"
     _write_lines(todo_file, lines)
 
@@ -195,6 +219,7 @@ def do_add(todo_file: Path, text: str):
 
 # ── osascript ─────────────────────────────────────────────────────────────────
 
+
 def ask_dialog(prompt: str, default: str = ""):
     safe = default.replace("\\", "\\\\").replace('"', '" & quote & "')
     script = (
@@ -211,31 +236,32 @@ def ask_dialog(prompt: str, default: str = ""):
 
 # ── xbar rendering ────────────────────────────────────────────────────────────
 
-_ANSI = {
-    "black": "\x1b[30m", "red":     "\x1b[31m", "green":   "\x1b[32m",
-    "yellow": "\x1b[33m", "blue":    "\x1b[34m", "magenta": "\x1b[35m",
-    "cyan":  "\x1b[36m", "white":   "\x1b[37m", "gray":    "\x1b[90m",
-    "grey":  "\x1b[90m",
-}
-_RESET = "\x1b[0m"  # SwiftBar's ANSI parser breaks without explicit reset between codes
+_RESET = "\x1b[0m"
+_COLOR_PROJECT = "\x1b[32m"  # green
+_COLOR_CONTEXT = "\x1b[36m"  # cyan
+_COLOR_OVERDUE = "red"
+_COLOR_DUE_TODAY = "yellow"
+_COLOR_DUE_FUTURE = "\x1b[35m"  # magenta
 
 
-def colorize(text: str, cfg: dict) -> str:
-    # xbar only handles one color switch per line; apply project then context.
-    def ansi(name): return _ANSI.get(name.lower(), "")
-    pc, cc = ansi(cfg["color_project"]), ansi(cfg["color_context"])
-    if pc:
-        new = re.sub(r"(?<!\S)(\+\S+)", f"{pc}\\1{_RESET}", text)
-        if new != text:
-            return new
-    if cc:
-        new = re.sub(r"(?<!\S)(@\S+)", f"{cc}\\1{_RESET}", text)
-        if new != text:
-            return new
+def colorize(text: str, due_future: bool = False) -> str:
+    if due_future:
+        text = re.sub(
+            r"due:\d{4}-\d{2}-\d{2}", f"{_COLOR_DUE_FUTURE}\\g<0>{_RESET}", text
+        )
+    text = re.sub(r"(?<!\S)(\+\S+)", f"{_COLOR_PROJECT}\\1{_RESET}", text)
+    text = re.sub(r"(?<!\S)(@\S+)", f"{_COLOR_CONTEXT}\\1{_RESET}", text)
     return text
 
 
-def _item(label: str, args: list, *, color: str = None, alternate: bool = False, ansi: bool = False):
+def _item(
+    label: str,
+    args: list,
+    *,
+    color: str = None,
+    alternate: bool = False,
+    ansi: bool = False,
+):
     parts = [f"bash={SCRIPT}"]
     for i, a in enumerate(args, 1):
         parts.append(f"param{i}={a}")
@@ -270,20 +296,27 @@ def render(todo_file: Path, done_file: Path, cfg: dict):
         label = t.body
         if cfg["show_priority"] and t.priority:
             label = f"({t.priority}) {label}"
-        if len(label) > 70:
-            label = label[:67] + "…"
 
-        color = None
-        if t.due:
-            if t.due < TODAY:
-                color = cfg["color_overdue"]
-            elif t.due == TODAY:
-                color = cfg["color_due_today"]
-
-        display = colorize(label, cfg) if not color else label
-        _item(display, ["edit", str(t.line_num)], color=color, ansi=not color)
-        _item(f"✓ {display}", ["done", str(t.line_num)],
-              color=color, alternate=True, ansi=not color)
+        if t.due and t.due < TODAY:
+            _item(label, ["edit", str(t.line_num)], color=_COLOR_OVERDUE)
+            _item(
+                f"✓ {label}",
+                ["done", str(t.line_num)],
+                color=_COLOR_OVERDUE,
+                alternate=True,
+            )
+        elif t.due and t.due == TODAY:
+            _item(label, ["edit", str(t.line_num)], color=_COLOR_DUE_TODAY)
+            _item(
+                f"✓ {label}",
+                ["done", str(t.line_num)],
+                color=_COLOR_DUE_TODAY,
+                alternate=True,
+            )
+        else:
+            display = colorize(label, due_future=bool(t.due))
+            _item(display, ["edit", str(t.line_num)], ansi=True)
+            _item(f"✓ {display}", ["done", str(t.line_num)], alternate=True, ansi=True)
 
     if len(active) > cfg["max_items"]:
         print(f"… {len(active) - cfg['max_items']} more | color=gray size=11")
@@ -291,10 +324,7 @@ def render(todo_file: Path, done_file: Path, cfg: dict):
     if done:
         print("---")
         for t in done:
-            label = t.body
-            if len(label) > 70:
-                label = label[:67] + "…"
-            print(f"✓ {label} | color=gray")
+            print(f"✓ {t.body} | color=gray")
 
     print("---")
     print(f"Add task | bash={SCRIPT} param1=add terminal=false refresh=true")
@@ -309,6 +339,7 @@ def render(todo_file: Path, done_file: Path, cfg: dict):
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
+
 
 def main():
     todo_file, done_file = get_file_paths()
