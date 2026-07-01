@@ -27,6 +27,12 @@ chmod +x todotxt.1m.py
 
 Then refresh xbar.
 
+Alternatively, symlink it from your clone so `git pull` keeps the plugin current:
+
+```bash
+ln -sfn "$(pwd)/todotxt.1m.py" ~/Library/"Application Support"/xbar/plugins/todotxt.1m.py
+```
+
 ## Configuration
 
 ### File paths
