@@ -115,18 +115,18 @@ class Task:
             m = re.match(r"^(\d{4}-\d{2}-\d{2}) ", s)
             if m:
                 self.completion_date = m.group(1)
-                s = s[m.end() :]
+                s = s[m.end():]
 
         if not self.done:
             m = re.match(r"^\(([A-Z])\) ", s)
             if m:
                 self.priority = m.group(1)
-                s = s[m.end() :]
+                s = s[m.end():]
 
         m = re.match(r"^(\d{4}-\d{2}-\d{2}) ", s)
         if m:
             self.creation_date = m.group(1)
-            s = s[m.end() :]
+            s = s[m.end():]
 
         self.body = s
         self.projects = re.findall(r"(?<!\S)\+(\S+)", s)
@@ -192,7 +192,7 @@ def do_done(todo_file: Path, line_num: int):
         if not raw.startswith("x "):
             m = re.match(r"^\(([A-Z])\) ", raw)
             if m:
-                raw = f"{raw[m.end() :]} pri:{m.group(1)}"
+                raw = f"{raw[m.end():]} pri:{m.group(1)}"
             lines[line_num - 1] = f"x {TODAY} {raw}\n"
     _write_lines(todo_file, lines)
 
