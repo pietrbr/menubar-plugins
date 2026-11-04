@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-# <xbar.title>Todo.txt</xbar.title>
+# <xbar.title>todo.txt</xbar.title>
 # <xbar.version>v1.0</xbar.version>
-# <xbar.author>Pietro</xbar.author>
+# <xbar.author>Pietro Brach del Prever</xbar.author>
 # <xbar.desc>Todo.txt in the menu bar: view, add, edit, complete, archive.</xbar.desc>
 # <xbar.dependencies>python3</xbar.dependencies>
 
 """
 Actions dispatched via sys.argv:
-  edit    <line>  – osascript dialog pre-filled with task text, writes back on Save
-  done    <line>  – mark complete: strips (X), appends pri:X, prepends x DATE
+  edit    <line>  - osascript dialog pre-filled with task text, writes back on Save
+  done    <line>  - mark complete: strips (X), appends pri:X, prepends x DATE
   undo    <line>  - reverse of done: strips x DATE, restores (X) from pri:X
-  archive         – move all x-prefixed lines from todo.txt to done.txt
-  add             – osascript prompt, appends creation-dated task
+  archive         - move all x-prefixed lines from todo.txt to done.txt
+  add             - osascript prompt, appends creation-dated task
 
 Config sources:
-  ~/.todo/config                – todo-txt shell vars (TODO_FILE, DONE_FILE …)
-  ~/.todo/todotxt-bar.ini       – plugin-only settings (sort_by, max_items …)
+  ~/.todo/config                - todo-txt shell vars (TODO_FILE, DONE_FILE ...)
+  ~/.todo/todotxt-bar.ini       - plugin-only settings (sort_by, max_items ...)
 """
 
 import configparser
@@ -30,7 +30,7 @@ SCRIPT = os.path.realpath(sys.argv[0])
 TODAY = date.today().isoformat()
 
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# -- Config --------------------------------------------------------------------
 
 
 def _expand_vars(val: str, env: dict) -> str:
@@ -81,21 +81,21 @@ def load_plugin_config() -> dict:
     }
 
 
-# ── Task model ────────────────────────────────────────────────────────────────
+# -- Task model ----------------------------------------------------------------
 
 
 class Task:
     __slots__ = (
-        "line_num",
-        "raw",
-        "done",
-        "priority",
-        "creation_date",
-        "completion_date",
         "body",
-        "due",
-        "projects",
+        "completion_date",
         "contexts",
+        "creation_date",
+        "done",
+        "due",
+        "line_num",
+        "priority",
+        "projects",
+        "raw",
     )
 
     def __init__(self, line_num: int, raw: str):
@@ -165,7 +165,7 @@ def read_tasks(path: Path) -> list:
     return [Task(i + 1, ln) for i, ln in enumerate(lines) if ln.strip()]
 
 
-# ── File operations ───────────────────────────────────────────────────────────
+# -- File operations -----------------------------------------------------------
 
 
 def _read_lines(path: Path) -> list:
@@ -234,7 +234,7 @@ def do_add(todo_file: Path, text: str):
             f.write(line + "\n")
 
 
-# ── osascript ─────────────────────────────────────────────────────────────────
+# -- osascript -----------------------------------------------------------------
 
 
 def ask_dialog(prompt: str, default: str = ""):
@@ -251,7 +251,7 @@ def ask_dialog(prompt: str, default: str = ""):
     return None if r.returncode != 0 else r.stdout.strip()
 
 
-# ── xbar rendering ────────────────────────────────────────────────────────────
+# -- xbar rendering ------------------------------------------------------------
 
 _RESET = "\x1b[0m"
 _COLOR_PROJECT = "\x1b[32m"  # green
@@ -336,7 +336,7 @@ def render(todo_file: Path, done_file: Path, cfg: dict):
             _item(f"✓ {display}", ["done", str(t.line_num)], alternate=True, ansi=True)
 
     if len(active) > cfg["max_items"]:
-        print(f"… {len(active) - cfg['max_items']} more | color=gray size=11")
+        print(f"... {len(active) - cfg['max_items']} more | color=gray size=11")
 
     if done:
         print("---")
@@ -361,7 +361,7 @@ def render(todo_file: Path, done_file: Path, cfg: dict):
     print(f"Sorted by: {cfg['sort_by']} | color=gray size=11")
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# -- Entry point ---------------------------------------------------------------
 
 
 def main():

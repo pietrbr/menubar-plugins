@@ -8,10 +8,10 @@ Links: [SwiftBar](https://github.com/swiftbar/SwiftBar), [xbar](https://xbarapp.
 
 ## Plugins
 
-| Plugin | Menu | Documentation |
-| --- | --- | --- |
-| `plugins/todotxt.1m.py` | Your todo.txt tasks: view, add, edit, complete, archive | [docs/todotxt.md](docs/todotxt.md) |
-| `plugins/tools.sh` | Clipboard tools, for example a count of characters, words, and lines | [docs/tools.md](docs/tools.md) |
+| Plugin                  | Menu                                                                 | Documentation                      |
+| ----------------------- | -------------------------------------------------------------------- | ---------------------------------- |
+| `plugins/todotxt.1m.py` | Your todo.txt tasks: view, add, edit, complete, archive              | [docs/todotxt.md](docs/todotxt.md) |
+| `plugins/tools.sh`      | Clipboard tools, for example a count of characters, words, and lines | [docs/tools.md](docs/tools.md)     |
 
 ## Requirements
 
