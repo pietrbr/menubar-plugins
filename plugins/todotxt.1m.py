@@ -9,6 +9,7 @@
 Actions dispatched via sys.argv:
   edit    <line>  – osascript dialog pre-filled with task text, writes back on Save
   done    <line>  – mark complete: strips (X), appends pri:X, prepends x DATE
+  undo    <line>  - reverse of done: strips x DATE, restores (X) from pri:X
   archive         – move all x-prefixed lines from todo.txt to done.txt
   add             – osascript prompt, appends creation-dated task
 
@@ -197,6 +198,22 @@ def do_done(todo_file: Path, line_num: int):
     _write_lines(todo_file, lines)
 
 
+def do_undo(todo_file: Path, line_num: int):
+    lines = _read_lines(todo_file)
+    if not 0 < line_num <= len(lines):
+        return
+    raw = lines[line_num - 1].rstrip("\n")
+    m = re.match(r"^x (?:\d{4}-\d{2}-\d{2} )?(.*)$", raw)
+    if not m:
+        return
+    raw = m.group(1)
+    p = re.search(r" pri:([A-Z])$", raw)
+    if p:
+        raw = f"({p.group(1)}) {raw[:p.start()]}"
+    lines[line_num - 1] = raw + "\n"
+    _write_lines(todo_file, lines)
+
+
 def do_archive(todo_file: Path, done_file: Path):
     lines = _read_lines(todo_file)
     active, completed = [], []
@@ -324,7 +341,13 @@ def render(todo_file: Path, done_file: Path, cfg: dict):
     if done:
         print("---")
         for t in done:
-            print(f"✓ {t.body} | color=gray")
+            print(f"✓ {t.body.replace('|', '｜')} | color=gray")
+            _item(
+                f"Undo {t.body}",
+                ["undo", str(t.line_num)],
+                color="gray",
+                alternate=True,
+            )
 
     print("---")
     print(f"Add task | bash={SCRIPT} param1=add terminal=false refresh=true")
@@ -362,6 +385,9 @@ def main():
 
     elif action == "done":
         do_done(todo_file, int(rest[0]))
+
+    elif action == "undo":
+        do_undo(todo_file, int(rest[0]))
 
     elif action == "archive":
         do_archive(todo_file, done_file)

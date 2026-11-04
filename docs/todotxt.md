@@ -8,6 +8,7 @@
 - Add tasks in a dialog, with the creation date added
 - Edit any task in a dialog
 - Mark a task complete: hold Option and click the task
+- Reopen a completed task: hold Option and click the completed task
 - Archive completed tasks to `done.txt`
 - Overdue tasks and tasks due today in color
 - `+project` and `@context` tags in color
