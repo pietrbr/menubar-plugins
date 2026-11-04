@@ -1,66 +1,42 @@
-# xbar-todotxt
+# menubar-plugins
 
-An [xbar](https://xbarapp.com) plugin that puts your [todo.txt](http://todotxt.org) in the macOS menu bar.
+Plugins that add small tools to the macOS menu bar. Each plugin is one script that a menu bar runner shows as a menu. The author tests the plugins with SwiftBar.
 
-## Features
+The plugins use the xbar plugin format. They can also work in xbar, but the author does not test them there.
 
-- View active tasks sorted by priority, due date, project, or context
-- Add tasks via a dialog (auto-stamped with creation date)
-- Edit any task inline
-- Mark tasks complete with one click
-- Archive completed tasks to `done.txt`
-- Color-coded overdue and due-today tasks
-- `+project` and `@context` tag highlighting
+Links: [SwiftBar](https://github.com/swiftbar/SwiftBar), [xbar](https://xbarapp.com).
+
+## Plugins
+
+| Plugin | Menu | Documentation |
+| --- | --- | --- |
+| `plugins/todotxt.1m.py` | Your todo.txt tasks: view, add, edit, complete, archive | [docs/todotxt.md](docs/todotxt.md) |
+| `plugins/tools.sh` | Clipboard tools, for example a count of characters, words, and lines | [docs/tools.md](docs/tools.md) |
 
 ## Requirements
 
-- macOS with [xbar](https://xbarapp.com) installed
-- Python 3
+- macOS
+- SwiftBar
+- Python 3 for `todotxt.1m.py`
 
 ## Installation
 
-Copy `todotxt.1m.py` to your xbar plugins directory (e.g. `~/Library/Application Support/xbar/plugins/`) and make it executable:
+1. Install SwiftBar with `brew install --cask swiftbar`.
+2. Open SwiftBar and choose a plugin folder, for example `~/Library/Application Support/SwiftBar/plugins`.
+3. Clone this repository.
+4. In the clone, link each plugin that you want into the plugin folder:
 
-```bash
-chmod +x todotxt.1m.py
-```
+   ```sh
+   ln -sfn "$(pwd)/plugins/todotxt.1m.py" ~/Library/"Application Support"/SwiftBar/plugins/todotxt.1m.py
+   ```
 
-Then refresh xbar.
+5. In the SwiftBar menu, select Refresh All.
 
-Alternatively, symlink it from your clone so `git pull` keeps the plugin current:
+Because the plugin folder holds links, a `git pull` in the clone updates the plugins.
 
-```bash
-ln -sfn "$(pwd)/todotxt.1m.py" ~/Library/"Application Support"/xbar/plugins/todotxt.1m.py
-```
+To use all plugins in this repository, you can choose the `plugins` folder of the clone as the SwiftBar plugin folder. Then you do not need links.
 
-## Configuration
-
-### File paths
-
-The plugin reads `~/.todo/config` for the standard todo-txt shell variables:
-
-```sh
-export TODO_DIR="$HOME/todo"
-export TODO_FILE="$TODO_DIR/todo.txt"
-export DONE_FILE="$TODO_DIR/done.txt"
-```
-
-If the file doesn't exist, defaults are `~/todo/todo.txt` and `~/todo/done.txt`.
-
-### Plugin settings
-
-Create `~/.todo/todotxt-bar.ini` to override plugin-specific options:
-
-```ini
-[settings]
-sort_by       = priority   ; priority | due | project | context
-max_items     = 30
-show_priority = true
-color_project  = green     ; ANSI color name
-color_context  = green     ; ANSI color name
-color_overdue  = #FF6B6B   ; hex, applied to whole line
-color_due_today = #FFD93D  ; hex, applied to whole line
-```
+The file name controls how often SwiftBar runs a plugin. For example, `todotxt.1m.py` runs every minute. To change the interval, give the link a different name, for example `todotxt.5m.py`.
 
 ## License
 
