@@ -1,6 +1,6 @@
 # tools
 
-`plugins/tools.sh` shows a menu of small tools. In SwiftBar, the menu bar icon is the SF Symbol `wrench.and.screwdriver`.
+`plugins/tools.sh` shows a menu of small tools. In SwiftBar, the menu bar icon is the SF Symbol `case`.
 
 ## Tools
 

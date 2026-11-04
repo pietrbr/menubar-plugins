@@ -28,6 +28,6 @@ if [ "$1" = "count" ]; then
   exit 0
 fi
 
-echo ":wrench.and.screwdriver:"
+echo ":case:"
 echo "---"
 echo "Count clipboard | bash='$0' param1=count terminal=false"
