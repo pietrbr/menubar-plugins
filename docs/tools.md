@@ -16,11 +16,11 @@ Clipboard line: shows the number of characters, words, and lines of the clipboar
 
 Open clipboard in MarkEdit: opens the clipboard in MarkEdit. If the clipboard holds a file, MarkEdit opens that file. Otherwise it opens the clipboard text.
 
-Summarize clipboard: a click on a model summarizes the clipboard with that model. The result goes to the clipboard, and a notification shows its first line. The summary explains the content to a colleague who hears about it for the first time. Long content gets a 1-2 sentence abstract and a short summary. Shorter content gets less.
+Summarize clipboard: one click summarizes the clipboard with the default model. The result goes to the clipboard, and a notification shows its first line. The summary explains the content to a colleague who hears about it for the first time. Long content gets a 1-2 sentence abstract and a short summary. Shorter content gets less.
 
-Polish text: a click on a model polishes the clipboard text with that model. The result goes to the clipboard. The tool always fixes errors and improves the phrasing toward American English. Tone and level control the rest.
+Polish text: one click polishes the clipboard text with the default model, tone, and level. The menu item shows the current settings in brackets after its name. The result goes to the clipboard. The tool always fixes errors and improves the phrasing toward American English. Tone and level control the rest.
 
-Settings: opens one window for the default model, the polish tone, and the polish level. The default model has a checkmark in the menu. The settings are in `~/.config/menubar-tools/state`.
+Settings: opens one window for the default model, the polish tone, and the polish level. All tools use these settings, so you set them once. The settings are in `~/.config/menubar-tools/state`.
 
 ## Models
 

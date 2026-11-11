@@ -24,6 +24,9 @@ PI_MODEL=gpt-6.1-sol
 PI_THINKING=low
 CLAUDE_MODEL=opus
 CLAUDE_EFFORT=medium
+RUN_TIMEOUT_SECONDS=120
+TIMEOUT_STATUS=142
+LOCK_DIR="$STATE_DIR/lock"
 
 ENGINE_SOL=sol
 ENGINE_OPUS=opus
@@ -112,10 +115,12 @@ open_clipboard() {
 }
 
 # Sets ATTACH to an image path, or writes text to $1. Sets ERROR on failure.
+# Sets FROM_FILE to the copied file, if any.
 read_input() {
   ATTACH=
   ERROR=
   path=$(clipboard_file)
+  FROM_FILE=$path
   if [ -z "$path" ]; then
     pbpaste >"$1"
     return
@@ -160,22 +165,39 @@ build_polish_prompt() {
   esac
 }
 
+with_timeout() {
+  perl -e 'alarm shift; exec @ARGV' "$RUN_TIMEOUT_SECONDS" "$@"
+}
+
+acquire_lock() {
+  mkdir -p "$STATE_DIR"
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    holder=$(cat "$LOCK_DIR/pid" 2>/dev/null)
+    if [ -z "$holder" ] || kill -0 "$holder" 2>/dev/null; then
+      return 1
+    fi
+    rm -rf "$LOCK_DIR"
+    mkdir "$LOCK_DIR" || return 1
+  fi
+  echo $$ >"$LOCK_DIR/pid"
+}
+
 run_pi() {
   if [ -n "$ATTACH" ]; then
     source_file=$ATTACH
   else
     source_file=$2
   fi
-  pi -p --no-session --no-tools --no-extensions --no-skills --no-context-files \
+  with_timeout pi -p --no-session --no-tools --no-extensions --no-skills --no-context-files \
     --no-prompt-templates --no-mcp \
     --provider "$PI_PROVIDER" --model "$PI_MODEL" --thinking "$PI_THINKING" \
     --system-prompt "$(cat "$1")" @"$source_file" "Process the attached content as instructed." </dev/null
 }
 
 run_claude() {
-  claude -p --safe-mode --no-session-persistence --tools "" \
+  with_timeout claude -p --safe-mode --no-session-persistence --tools "" \
     --model "$CLAUDE_MODEL" --effort "$CLAUDE_EFFORT" \
-    --system-prompt "$(cat "$1" "$SIMPLE_ENGLISH_SKILL")" <"$2"
+    --system-prompt "$(cat "$1")" <"$2"
 }
 
 run_tool() {
@@ -187,8 +209,12 @@ run_tool() {
     polish) label=Polish ;;
   esac
 
+  if ! acquire_lock; then
+    notify "$label: already running."
+    exit 1
+  fi
   work=$(mktemp -d)
-  trap 'rm -rf "$work"' EXIT
+  trap 'rm -rf "$work" "$LOCK_DIR"' EXIT
   input="$work/input.txt"
   system_prompt="$work/system.md"
   output="$work/output.md"
@@ -198,8 +224,12 @@ run_tool() {
     notify "$label: $ERROR"
     exit 1
   fi
-  if [ -z "$ATTACH" ] && [ ! -s "$input" ]; then
-    notify "$label: clipboard is empty."
+  if [ -z "$ATTACH" ] && ! grep -q '[^[:space:]]' "$input"; then
+    if [ -n "$FROM_FILE" ]; then
+      notify "$label: no text found in the file."
+    else
+      notify "$label: clipboard is empty."
+    fi
     exit 1
   fi
   if [ -n "$ATTACH" ] && { [ "$tool" = polish ] || [ "$engine" = "$ENGINE_OPUS" ]; }; then
@@ -213,9 +243,12 @@ run_tool() {
     cp "$PROMPTS/summarize.md" "$system_prompt"
   fi
 
-  if [ "$engine" = "$ENGINE_OPUS" ] && [ ! -f "$SIMPLE_ENGLISH_SKILL" ]; then
-    notify "$label: missing $SIMPLE_ENGLISH_SKILL"
-    exit 1
+  if [ "$engine" = "$ENGINE_OPUS" ] && [ "$tool" = summarize ]; then
+    if [ ! -f "$SIMPLE_ENGLISH_SKILL" ]; then
+      notify "$label: missing $SIMPLE_ENGLISH_SKILL"
+      exit 1
+    fi
+    cat "$SIMPLE_ENGLISH_SKILL" >>"$system_prompt"
   fi
 
   notify "$label: running with $engine..."
@@ -227,6 +260,10 @@ run_tool() {
   fi
   status=$?
 
+  if [ "$status" -eq "$TIMEOUT_STATUS" ]; then
+    notify "$label failed: no answer after $RUN_TIMEOUT_SECONDS seconds."
+    exit 1
+  fi
   if [ "$status" -ne 0 ] || [ ! -s "$output" ]; then
     notify "$label failed: $(tr '\n' ' ' <"$work/error.txt" | cut -c 1-200)"
     exit 1
@@ -252,32 +289,13 @@ esac
 
 load_state
 
-option_title() {
-  echo "$2" | tr ',' '\n' | sed -n "s/^$1:\(.*\)/\1/p"
-}
-
-run_items() {
-  for engine in $ENGINE_SOL $ENGINE_OPUS; do
-    printf -- "--%s | bash='%s' param1=run param2=%s param3=%s terminal=false" \
-      "$(option_title "$engine" "$ENGINE_OPTIONS")" "$SELF" "$1" "$engine"
-    if [ "$engine" = "$default_engine" ]; then
-      printf ' checked=true'
-    fi
-    echo
-  done
-}
-
 echo ":case:"
 echo "---"
 echo "Clipboard: $(count_clipboard)"
 echo "Open clipboard in MarkEdit | bash='$SELF' param1=open terminal=false"
 echo "---"
-echo "Summarize clipboard"
-run_items summarize
-echo "Polish text"
-run_items polish
-echo "-----"
-level_title=$(option_title "$polish_level" "$LEVEL_OPTIONS")
-echo "--$(option_title "$polish_tone" "$TONE_OPTIONS"), ${level_title%% - *} level"
+engine_label=$(echo "$default_engine" | awk '{ print toupper(substr($0, 1, 1)) substr($0, 2) }')
+echo "Summarize clipboard  -  [$engine_label] | bash='$SELF' param1=run param2=summarize terminal=false"
+echo "Polish text  -  [$engine_label, $polish_tone tone, $polish_level level] | bash='$SELF' param1=run param2=polish terminal=false"
 echo "---"
 echo "Settings... | bash='$SELF' param1=settings terminal=false refresh=true"
