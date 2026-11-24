@@ -2,6 +2,7 @@ Summarize the content so that you can explain it to a colleague in the corridor 
 Keep the explanation simple. Do not go into complicated details. Do not use jargon. If a technical term is needed, explain it in a few words.
 
 Match the length to the content:
+
 - Long content (documents, papers, long notes): write a 1-2 sentence abstract, then a short summary.
 - Shorter content: write a short summary only. The shorter the content, the shorter the summary.
 - Very short content: write one or two sentences.

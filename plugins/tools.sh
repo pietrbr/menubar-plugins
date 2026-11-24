@@ -19,24 +19,28 @@ STATE_FILE="$STATE_DIR/state"
 VIEW_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/menubar-tools/clipboard.md"
 SIMPLE_ENGLISH_SKILL="$HOME/.claude/plugins/marketplaces/simple-english/skills/simple-english/SKILL.md"
 
-PI_PROVIDER=openai-codex
-PI_MODEL=gpt-6.1-sol
-PI_THINKING=low
+CODEX_MODEL=gpt-6.1-sol
+CODEX_EFFORT=low
+QWEN_MODEL=qwen9
+LLAMA_URL=http://127.0.0.1:8080/v1/chat/completions
 CLAUDE_MODEL=opus
 CLAUDE_EFFORT=medium
 RUN_TIMEOUT_SECONDS=120
 TIMEOUT_STATUS=142
 LOCK_DIR="$STATE_DIR/lock"
+# shortcut: shares auth.json by symlink, copy it if a token refresh replaces the link.
+CODEX_HOME_DIR="$STATE_DIR/codex-home"
 
 ENGINE_SOL=sol
 ENGINE_OPUS=opus
-ENGINE_OPTIONS="$ENGINE_SOL:GPT sol (light),$ENGINE_OPUS:Claude Opus (medium)"
+ENGINE_QWEN=qwen
+ENGINE_OPTIONS="$ENGINE_SOL:GPT sol (light),$ENGINE_OPUS:Claude Opus (medium),$ENGINE_QWEN:Qwen 9B (local)"
 TONE_OPTIONS="original:Keep original,formal:Formal,friendly:Friendly,direct:Direct"
-LEVEL_OPTIONS="light:Light - fix errors and keep order and length,balanced:Balanced - clearer flow and little shortening,tight:Tight - like Balanced but clearly shorter"
+STYLE_OPTIONS="proofread:Proofread - fix errors and change a few words,polish:Polish - clearer flow and little shortening,polish_shorten:Polish and shorten - clearer flow and about 60% of the length"
 
 default_engine=$ENGINE_SOL
 polish_tone=original
-polish_level=balanced
+polish_style=polish
 
 notify() {
   osascript \
@@ -53,9 +57,9 @@ load_state() {
 
 set_state() {
   case $2 in
-    *[!a-z0-9_]* | "")
-      return 1
-      ;;
+  *[!a-z0-9_]* | "")
+    return 1
+    ;;
   esac
   mkdir -p "$STATE_DIR"
   tmp=$(mktemp)
@@ -71,14 +75,15 @@ open_settings() {
   result=$(osascript -l JavaScript "$TOOLS_DIR/settings.js" \
     "Default model|$default_engine|$ENGINE_OPTIONS" \
     "Polish tone|$polish_tone|$TONE_OPTIONS" \
-    "Polish level|$polish_level|$LEVEL_OPTIONS")
+    "Polish style|$polish_style|$STYLE_OPTIONS")
   if [ -z "$result" ]; then
     return
   fi
+  # shellcheck disable=SC2086 # settings.js prints one value per line.
   set -- $result
   set_state default_engine "$1"
   set_state polish_tone "$2"
-  set_state polish_level "$3"
+  set_state polish_style "$3"
 }
 
 count_clipboard() {
@@ -126,18 +131,18 @@ read_input() {
     return
   fi
   case $(file -b --mime-type "$path") in
-    application/pdf)
-      pdftotext -layout "$path" "$1" 2>/dev/null || ERROR="pdftotext failed."
-      ;;
-    image/*)
-      ATTACH=$path
-      ;;
-    text/* | application/json | application/xml)
-      cp "$path" "$1"
-      ;;
-    *)
-      pandoc -t plain "$path" -o "$1" 2>/dev/null || ERROR="Unsupported file type."
-      ;;
+  application/pdf)
+    pdftotext -layout "$path" "$1" 2>/dev/null || ERROR="pdftotext failed."
+    ;;
+  image/*)
+    ATTACH=$path
+    ;;
+  text/* | application/json | application/xml)
+    cp "$path" "$1"
+    ;;
+  *)
+    pandoc -t plain "$path" -o "$1" 2>/dev/null || ERROR="Unsupported file type."
+    ;;
   esac
 }
 
@@ -149,20 +154,7 @@ build_polish_prompt() {
   else
     echo "Change the tone to $polish_tone."
   fi
-  case $polish_level in
-    light)
-      echo "Change as little as possible. Keep the order, the structure, and the length of the ideas."
-      ;;
-    tight)
-      echo "Improve flow and clarity. Reorder or restructure the ideas if that reads better."
-      echo "Shorten the text clearly. Aim for about 60% of the original length or less."
-      echo "Remove filler, repetition, and side remarks, but keep every key point and request."
-      ;;
-    *)
-      echo "Improve flow and clarity. Reorder or restructure the ideas if that reads better."
-      echo "Shorten lightly: remove only clear filler. Keep at least 80% of the original length. Do not cut content or detail."
-      ;;
-  esac
+  cat "$PROMPTS/polish-$polish_style.md"
 }
 
 with_timeout() {
@@ -182,16 +174,28 @@ acquire_lock() {
   echo $$ >"$LOCK_DIR/pid"
 }
 
-run_pi() {
+run_codex() {
+  codex_prompt=$(cat "$1")
+  codex_input=$2
+  mkdir -p "$CODEX_HOME_DIR"
+  [ -e "$CODEX_HOME_DIR/auth.json" ] || ln -s "$HOME/.codex/auth.json" "$CODEX_HOME_DIR/auth.json"
+  set -- env CODEX_HOME="$CODEX_HOME_DIR" codex exec --ephemeral --skip-git-repo-check \
+    -s read-only -m "$CODEX_MODEL" -c model_reasoning_effort="$CODEX_EFFORT" \
+    -c features.shell_tool=false -c features.unified_exec=false -c web_search=disabled
   if [ -n "$ATTACH" ]; then
-    source_file=$ATTACH
+    with_timeout "$@" --image="$ATTACH" -- "$codex_prompt" </dev/null
   else
-    source_file=$2
+    with_timeout "$@" -- "$codex_prompt" <"$codex_input"
   fi
-  with_timeout pi -p --no-session --no-tools --no-extensions --no-skills --no-context-files \
-    --no-prompt-templates --no-mcp \
-    --provider "$PI_PROVIDER" --model "$PI_MODEL" --thinking "$PI_THINKING" \
-    --system-prompt "$(cat "$1")" @"$source_file" "Process the attached content as instructed." </dev/null
+}
+
+run_qwen() {
+  jq -n --rawfile system "$1" --rawfile user "$2" --arg model "$QWEN_MODEL" \
+    '{model: $model, chat_template_kwargs: {enable_thinking: false},
+      messages: [{role: "system", content: $system}, {role: "user", content: $user}]}' >request.json
+  with_timeout curl -sS --fail-with-body --connect-timeout 5 "$LLAMA_URL" -H 'Content-Type: application/json' -d @request.json \
+    >response.json || return
+  jq -r '.choices[0].message.content // error(.error.message // "no answer")' response.json
 }
 
 run_claude() {
@@ -205,8 +209,8 @@ run_tool() {
   tool=$1
   engine=${2:-$default_engine}
   case $tool in
-    summarize) label=Summarize ;;
-    polish) label=Polish ;;
+  summarize) label=Summarize ;;
+  polish) label=Polish ;;
   esac
 
   if ! acquire_lock; then
@@ -232,7 +236,7 @@ run_tool() {
     fi
     exit 1
   fi
-  if [ -n "$ATTACH" ] && { [ "$tool" = polish ] || [ "$engine" = "$ENGINE_OPUS" ]; }; then
+  if [ -n "$ATTACH" ] && { [ "$tool" = polish ] || [ "$engine" != "$ENGINE_SOL" ]; }; then
     notify "$label: images work only with summarize and the sol engine."
     exit 1
   fi
@@ -253,11 +257,11 @@ run_tool() {
 
   notify "$label: running with $engine..."
   cd "$work" || exit 1
-  if [ "$engine" = "$ENGINE_OPUS" ]; then
-    run_claude "$system_prompt" "$input" >"$output" 2>"$work/error.txt"
-  else
-    run_pi "$system_prompt" "$input" >"$output" 2>"$work/error.txt"
-  fi
+  case $engine in
+  "$ENGINE_OPUS") run_claude "$system_prompt" "$input" ;;
+  "$ENGINE_QWEN") run_qwen "$system_prompt" "$input" ;;
+  *) run_codex "$system_prompt" "$input" ;;
+  esac >"$output" 2>"$work/error.txt"
   status=$?
 
   if [ "$status" -eq "$TIMEOUT_STATUS" ]; then
@@ -273,18 +277,18 @@ run_tool() {
 }
 
 case "$1" in
-  open)
-    open_clipboard
-    exit 0
-    ;;
-  run)
-    run_tool "$2" "$3"
-    exit 0
-    ;;
-  settings)
-    open_settings
-    exit 0
-    ;;
+open)
+  open_clipboard
+  exit 0
+  ;;
+run)
+  run_tool "$2" "$3"
+  exit 0
+  ;;
+settings)
+  open_settings
+  exit 0
+  ;;
 esac
 
 load_state
@@ -296,6 +300,6 @@ echo "Open clipboard in MarkEdit | bash='$SELF' param1=open terminal=false"
 echo "---"
 engine_label=$(echo "$default_engine" | awk '{ print toupper(substr($0, 1, 1)) substr($0, 2) }')
 echo "Summarize clipboard  -  [$engine_label] | bash='$SELF' param1=run param2=summarize terminal=false"
-echo "Polish text  -  [$engine_label, $polish_tone tone, $polish_level level] | bash='$SELF' param1=run param2=polish terminal=false"
+echo "Polish text  -  [$engine_label, $polish_tone tone, $(echo "$polish_style" | sed 's/_/ + /') style] | bash='$SELF' param1=run param2=polish terminal=false"
 echo "---"
 echo "Settings... | bash='$SELF' param1=settings terminal=false refresh=true"

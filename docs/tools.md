@@ -4,8 +4,9 @@
 
 ## Requirements
 
-- `pi` for the GPT sol engine. You must be logged in to the `openai-codex` provider.
+- `codex` for the GPT sol engine. You must be logged in to Codex.
 - `claude` for the Claude Opus engine.
+- A llama.cpp server at `127.0.0.1:8080` with the `qwen9` model for the Qwen engine. You also need `jq`.
 - The simple-english plugin for Claude Code. The Opus engine reads its `SKILL.md` from `~/.claude/plugins/marketplaces/simple-english/`.
 - MarkEdit for "Open clipboard in MarkEdit".
 - `pdftotext` to summarize PDF files, and `pandoc` for Word and similar files.
@@ -18,18 +19,19 @@ Open clipboard in MarkEdit: opens the clipboard in MarkEdit. If the clipboard ho
 
 Summarize clipboard: one click summarizes the clipboard with the default model. The result goes to the clipboard, and a notification shows its first line. The summary explains the content to a colleague who hears about it for the first time. Long content gets a 1-2 sentence abstract and a short summary. Shorter content gets less.
 
-Polish text: one click polishes the clipboard text with the default model, tone, and level. The menu item shows the current settings in brackets after its name. The result goes to the clipboard. The tool always fixes errors and improves the phrasing toward American English. Tone and level control the rest.
+Polish text: one click polishes the clipboard text with the default model, tone, and style. The menu item shows the current settings in brackets after its name. The result goes to the clipboard. The tool always fixes errors and improves the phrasing toward American English. Tone and style control the rest. If the text is a conversation, such as an email thread, the tool polishes only the newest message and uses the rest as context.
 
-Settings: opens one window for the default model, the polish tone, and the polish level. All tools use these settings, so you set them once. The settings are in `~/.config/menubar-tools/state`.
+Settings: opens one window for the default model, the polish tone, and the polish style. All tools use these settings, so you set them once. The settings are in `~/.config/menubar-tools/state`.
 
 ## Models
 
-| Model         | How it runs                                                |
-| ------------- | ---------------------------------------------------------- |
-| GPT sol       | `pi` with the `gpt-6.1-sol` model and low thinking effort  |
-| Claude Opus   | `claude` with medium effort and the simple-english rules   |
+| Model         | How it runs                                                                  |
+| ------------- | ---------------------------------------------------------------------------- |
+| GPT sol       | `codex exec` with the `gpt-6.1-sol` model and low reasoning effort           |
+| Claude Opus   | `claude` with medium effort and the simple-english rules                     |
+| Qwen 9B       | A direct request to the local llama.cpp server, with thinking turned off     |
 
-Both engines run without tools, skills, or project files. Only the Sol engine reads images.
+The engines run without tools, skills, plugins, or your global instructions. Codex uses its own settings folder, `~/.config/menubar-tools/codex-home`, which links only to your Codex login file. Only the Sol engine reads images.
 
 ## Clipboard content
 
@@ -44,21 +46,21 @@ The tools read text from the clipboard. If you copy a file in Finder, the tools 
 | Friendly      | The text becomes friendly and warm.       |
 | Direct        | The text becomes short and to the point.  |
 
-## Polish level
+## Polish style
 
-The level sets how much the tool can change your text.
+The style sets what kind of edit the tool makes.
 
-| Level    | What changes                                                                                          |
-| -------- | ----------------------------------------------------------------------------------------------------- |
-| Light    | Errors and small phrasing issues. The order of the ideas, the structure, and the length stay the same. |
-| Balanced | Also flow and clarity. The tool can reorder ideas. It removes only clear filler and keeps at least 80% of the length. |
-| Tight    | The same as Balanced, but the text becomes clearly shorter, about 60% of the length or less. Filler and repetition go. Key points stay. |
+| Style               | What changes                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------- |
+| Proofread           | Errors and a few words. The order of the ideas, the structure, and the length stay the same.               |
+| Polish              | Also flow and clarity. The tool can reorder ideas. It removes only clear filler and keeps at least 80% of the length. |
+| Polish and shorten  | The same as Polish, but the text becomes about 60% of the length or less. Filler and repetition go. Key points stay. |
 
-The default level is Balanced.
+The default style is Polish.
 
 ## Prompts
 
-The prompts are in `tools/prompts/`. Edit `summarize.md` or `polish.md` to change the base prompt. The plugin adds the tone and level text to the polish prompt.
+The prompts are in `tools/prompts/`. Edit `summarize.md` or `polish.md` to change the base prompt. Each polish style has its own file, for example `polish-polish.md`. The plugin adds the tone line and the style file to the polish prompt.
 
 ## Notifications
 
